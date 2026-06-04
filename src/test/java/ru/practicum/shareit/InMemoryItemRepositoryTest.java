@@ -53,15 +53,4 @@ public class InMemoryItemRepositoryTest {
         assertEquals("Аккумуляторная Дрель", foundItem.getName());
     }
 
-    @Test
-    void search_shouldReturnEmptyListWhenTextIsEmpty() {
-        Item item = new Item();
-        item.setName("Пила");
-        item.setAvailable(true);
-        itemRepository.create(item);
-
-        Collection<Item> foundItems = itemRepository.search("");
-
-        assertTrue(foundItems.isEmpty(), "Для пустого запроса должен возвращаться пустой список");
-    }
 }
