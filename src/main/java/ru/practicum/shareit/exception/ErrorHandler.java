@@ -39,4 +39,11 @@ public class ErrorHandler {
         return new ErrorResponse("Email уже занят другим пользователем: " + e.getMessage());
     }
 
+    @ExceptionHandler
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ErrorResponse handleThrowable(final Throwable e) {
+        log.error("Возникла непредвиденная ошибка сервера: ", e);
+        return new ErrorResponse("Произошла непредвиденная ошибка: " + e.getMessage());
+    }
+
 }

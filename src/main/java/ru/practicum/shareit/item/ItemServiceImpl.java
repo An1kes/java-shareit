@@ -72,6 +72,7 @@ public class ItemServiceImpl implements ItemService {
 
     @Override
     public Collection<ItemDto> findAllByOwnerId(Long userId) {
+        getUserOrThrow(userId);
         return itemRepository.findAll()
                 .stream()
                 .filter(item -> item.getOwner().getId().equals(userId))

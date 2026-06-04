@@ -19,7 +19,6 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserDto create(UserDto userDto) {
-        validateUser(userDto);
         checkEmailUnique(userDto.getEmail(), -1L);
         User user = UserMapper.toUser(userDto);
         userRepository.create(user);
@@ -79,24 +78,6 @@ public class UserServiceImpl implements UserService {
                     log.warn("Пользователь с ID {} не найден в системе", userId);
                     return new NotFoundException("Пользователь с ID " + userId + " не найден");
                 });
-    }
-
-    private void validateUser(UserDto userDto) {
-
-        if (userDto.getEmail() == null || userDto.getEmail().isBlank()) {
-            log.error("Ошибка валидации: электронная почта не может быть пустой");
-            throw new ValidationException("Электронная почта не может быть пустой");
-        }
-        if (!userDto.getEmail().contains("@")) {
-            log.error("Ошибка валидации: электронная почта должна содержать символ @");
-            throw new ValidationException("Электронная почта должна содержать символ @");
-        }
-
-        if (userDto.getName() == null || userDto.getName().isBlank()) {
-            log.debug("Имя пользователя не указано");
-            throw new ValidationException("Имя пользователя не указано");
-        }
-
     }
 
     private void checkEmailUnique(String email, Long userId) {

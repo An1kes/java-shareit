@@ -37,9 +37,6 @@ public class InMemoryItemRepository implements ItemRepository {
 
     @Override
     public Collection<Item> search(String text) {
-        if (text == null || text.isBlank()) {
-            return Collections.emptyList();
-        }
 
         String query = text.toLowerCase();
         return items.values().stream()
