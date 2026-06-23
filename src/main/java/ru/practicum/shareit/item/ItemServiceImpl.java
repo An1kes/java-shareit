@@ -2,16 +2,22 @@ package ru.practicum.shareit.item;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import ru.practicum.shareit.booking.Booking;
+import ru.practicum.shareit.booking.BookingRepository;
+import ru.practicum.shareit.booking.BookingStatus;
 import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.exception.ValidationException;
+import ru.practicum.shareit.item.dto.CommentDto;
 import ru.practicum.shareit.item.dto.ItemDto;
+import ru.practicum.shareit.item.model.Comment;
 import ru.practicum.shareit.item.model.Item;
 import ru.practicum.shareit.user.User;
 import ru.practicum.shareit.user.UserRepository;
 
-import java.util.Collection;
-import java.util.Collections;
+import java.time.LocalDateTime;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -20,6 +26,8 @@ public class ItemServiceImpl implements ItemService {
 
     private final ItemRepository itemRepository;
     private final UserRepository userRepository;
+    private final BookingRepository bookingRepository;
+    private final CommentRepository commentRepository;
 
     @Override
     public ItemDto create(ItemDto itemDto, Long userId) {
@@ -29,7 +37,7 @@ public class ItemServiceImpl implements ItemService {
 
         Item item = ItemMapper.toItem(itemDto);
         item.setOwner(owner);
-        Item savedItem = itemRepository.create(item);
+        Item savedItem = itemRepository.save(item);
 
         log.info("Успешно создана вещь с ID: {} для владельца с ID: {}", savedItem.getId(), userId);
 
@@ -57,7 +65,7 @@ public class ItemServiceImpl implements ItemService {
             oldItem.setAvailable(itemDto.getAvailable());
         }
 
-        Item updatedItem = itemRepository.updateItem(oldItem);
+        Item updatedItem = itemRepository.save(oldItem);
 
         log.info("Вещь с ID {} успешно обновлена владельцем с ID {}", itemId, userId);
 
@@ -65,19 +73,63 @@ public class ItemServiceImpl implements ItemService {
     }
 
     @Override
-    public ItemDto findById(Long itemId) {
+    public ItemDto findById(Long itemId, Long userId) {
         Item item = getItemOrThrow(itemId);
-        return ItemMapper.toItemDto(item);
+        ItemDto itemDto = ItemMapper.toItemDto(item);
+
+        if (item.getOwner().getId().equals(userId)) {
+            enrichItemWithBookings(itemDto);
+        }
+
+        List<CommentDto> comments = commentRepository.findAllByItem_Id(itemId)
+                .stream()
+                .map(CommentMapper::toCommentDto)
+                .toList();
+        itemDto.setComments(comments);
+
+        return itemDto;
     }
 
     @Override
     public Collection<ItemDto> findAllByOwnerId(Long userId) {
-        getUserOrThrow(userId);
-        return itemRepository.findAll()
-                .stream()
-                .filter(item -> item.getOwner().getId().equals(userId))
-                .map(ItemMapper::toItemDto)
-                .toList();
+        getUserOrThrow(userId); // Проверяем существование пользователя
+        log.info("Получен запрос на получение всех вещей владельца с ID {}", userId);
+
+        Collection<Item> items = itemRepository.findAllByOwnerId(userId);
+
+        List<ItemDto> itemDtos = new ArrayList<>();
+        List<Long> itemIds = new ArrayList<>();
+
+        for (Item item : items) {
+            itemDtos.add(ItemMapper.toItemDto(item));
+            itemIds.add(item.getId());
+        }
+
+        List<Comment> allComments = commentRepository.findAllByItem_IdIn(itemIds);
+
+        Map<Long, List<CommentDto>> commentsByItemId = new HashMap<>();
+
+        for (Comment comment : allComments) {
+            Long itemId = comment.getItem().getId();
+            CommentDto commentDto = CommentMapper.toCommentDto(comment);
+
+            if (!commentsByItemId.containsKey(itemId)) {
+                commentsByItemId.put(itemId, new ArrayList<>());
+            }
+            commentsByItemId.get(itemId).add(commentDto);
+        }
+
+        for (ItemDto itemDto : itemDtos) {
+            enrichItemWithBookings(itemDto);
+
+            List<CommentDto> itemComments = commentsByItemId.get(itemDto.getId());
+            if (itemComments == null) {
+                itemComments = new ArrayList<>();
+            }
+            itemDto.setComments(itemComments);
+        }
+
+        return itemDtos;
     }
 
     @Override
@@ -98,6 +150,32 @@ public class ItemServiceImpl implements ItemService {
                 .stream()
                 .map(ItemMapper::toItemDto)
                 .toList();
+    }
+
+    @Override
+    public CommentDto createComment(Long itemId, Long userId, CommentDto commentDto) {
+        User author = getUserOrThrow(userId);
+        Item item = getItemOrThrow(itemId);
+        LocalDateTime now = LocalDateTime.now();
+
+        boolean hasActiveBooking = bookingRepository.existsByBooker_IdAndItem_IdAndStatusAndEndBefore(
+                userId, itemId, BookingStatus.APPROVED, now
+        );
+
+        if (!hasActiveBooking) {
+            log.warn("Пользователь с ID {} пытается оставить отзыв на вещь с ID {}, которую он не арендовал (или аренда не завершена)", userId, itemId);
+            throw new ValidationException("Оставить отзыв может только тот пользователь, у которого завершился срок аренды этой вещи");
+        }
+
+        Comment comment = CommentMapper.toComment(commentDto);
+        comment.setItem(item);
+        comment.setAuthor(author);
+        comment.setCreated(now); // Фиксируем точное время написания отзыва
+
+        Comment savedComment = commentRepository.save(comment);
+        log.info("Пользователь с ID {} успешно оставил отзыв с ID {} к вещи с ID {}", userId, savedComment.getId(), itemId);
+
+        return CommentMapper.toCommentDto(savedComment);
     }
 
     private User getUserOrThrow(Long userId) {
@@ -130,6 +208,37 @@ public class ItemServiceImpl implements ItemService {
         if (itemDto.getAvailable() == null) {
             log.error("Ошибка валидации: статус доступности вещи не указан");
             throw new ValidationException("Статус доступности вещи должен быть указан");
+        }
+    }
+
+    private void enrichItemWithBookings(ItemDto itemDto) {
+        LocalDateTime now = LocalDateTime.now();
+
+        List<Booking> bookings = bookingRepository.findAllByItem_Id(
+                itemDto.getId(),
+                Sort.by(Sort.Direction.ASC, "start")
+        );
+
+        Booking lastBooking = null;
+        Booking nextBooking = null;
+
+        for (Booking booking : bookings) {
+            if (booking.getStatus() == BookingStatus.APPROVED) {
+
+                if (booking.getStart().isBefore(now) || booking.getStart().equals(now)) {
+                    lastBooking = booking;
+
+                } else if (booking.getStart().isAfter(now)) {
+                    nextBooking = booking;
+                }
+            }
+        }
+
+        if (lastBooking != null) {
+            itemDto.setLastBooking(new ItemDto.BookingShortDto(lastBooking.getId(), lastBooking.getBooker().getId()));
+        }
+        if (nextBooking != null) {
+            itemDto.setNextBooking(new ItemDto.BookingShortDto(nextBooking.getId(), nextBooking.getBooker().getId()));
         }
     }
 }
