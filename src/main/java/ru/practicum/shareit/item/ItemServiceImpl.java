@@ -78,9 +78,12 @@ public class ItemServiceImpl implements ItemService {
         ItemDto itemDto = ItemMapper.toItemDto(item);
 
         if (item.getOwner().getId().equals(userId)) {
-            enrichItemWithBookings(itemDto);
+            List<Booking> bookings = bookingRepository.findAllByItem_Id(
+                    itemId,
+                    Sort.by(Sort.Direction.ASC, "start")
+            );
+            enrichItemWithBookings(itemDto, bookings);
         }
-
         List<CommentDto> comments = commentRepository.findAllByItem_Id(itemId)
                 .stream()
                 .map(CommentMapper::toCommentDto)
@@ -92,7 +95,7 @@ public class ItemServiceImpl implements ItemService {
 
     @Override
     public Collection<ItemDto> findAllByOwnerId(Long userId) {
-        getUserOrThrow(userId); // Проверяем существование пользователя
+        getUserOrThrow(userId);
         log.info("Получен запрос на получение всех вещей владельца с ID {}", userId);
 
         Collection<Item> items = itemRepository.findAllByOwnerId(userId);
@@ -106,7 +109,6 @@ public class ItemServiceImpl implements ItemService {
         }
 
         List<Comment> allComments = commentRepository.findAllByItem_IdIn(itemIds);
-
         Map<Long, List<CommentDto>> commentsByItemId = new HashMap<>();
 
         for (Comment comment : allComments) {
@@ -119,8 +121,12 @@ public class ItemServiceImpl implements ItemService {
             commentsByItemId.get(itemId).add(commentDto);
         }
 
+        List<Booking> allBookings = bookingRepository.findAllByItem_IdInAndStatusOrderByStartAsc(itemIds, BookingStatus.APPROVED);
+        Map<Long, List<Booking>> bookingsByItemId = groupBookingsByItemId(allBookings);
+
         for (ItemDto itemDto : itemDtos) {
-            enrichItemWithBookings(itemDto);
+            List<Booking> itemBookings = bookingsByItemId.getOrDefault(itemDto.getId(), new ArrayList<>());
+            enrichItemWithBookings(itemDto, itemBookings);
 
             List<CommentDto> itemComments = commentsByItemId.get(itemDto.getId());
             if (itemComments == null) {
@@ -211,25 +217,22 @@ public class ItemServiceImpl implements ItemService {
         }
     }
 
-    private void enrichItemWithBookings(ItemDto itemDto) {
+    private void enrichItemWithBookings(ItemDto itemDto, List<Booking> itemBookings) {
+        if (itemBookings == null || itemBookings.isEmpty()) {
+            return;
+        }
+
         LocalDateTime now = LocalDateTime.now();
-
-        List<Booking> bookings = bookingRepository.findAllByItem_Id(
-                itemDto.getId(),
-                Sort.by(Sort.Direction.ASC, "start")
-        );
-
         Booking lastBooking = null;
         Booking nextBooking = null;
 
-        for (Booking booking : bookings) {
+        for (Booking booking : itemBookings) {
             if (booking.getStatus() == BookingStatus.APPROVED) {
-
                 if (booking.getStart().isBefore(now) || booking.getStart().equals(now)) {
                     lastBooking = booking;
-
                 } else if (booking.getStart().isAfter(now)) {
                     nextBooking = booking;
+                    break;
                 }
             }
         }
@@ -240,5 +243,20 @@ public class ItemServiceImpl implements ItemService {
         if (nextBooking != null) {
             itemDto.setNextBooking(new ItemDto.BookingShortDto(nextBooking.getId(), nextBooking.getBooker().getId()));
         }
+    }
+
+    private Map<Long, List<Booking>> groupBookingsByItemId(List<Booking> allBookings) {
+        Map<Long, List<Booking>> bookingsByItemId = new HashMap<>();
+
+        for (Booking booking : allBookings) {
+            Long itemId = booking.getItem().getId();
+
+            if (!bookingsByItemId.containsKey(itemId)) {
+                bookingsByItemId.put(itemId, new ArrayList<>());
+            }
+            bookingsByItemId.get(itemId).add(booking);
+        }
+
+        return bookingsByItemId;
     }
 }

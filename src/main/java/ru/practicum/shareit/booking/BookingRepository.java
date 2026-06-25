@@ -49,6 +49,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     // Альтернативный быстрый поиск всех бронирований для списка вещей (для избежания проблемы N+1)
     List<Booking> findAllByItem_IdIn(List<Long> itemIds, Sort sort);
 
+    List<Booking> findAllByItem_IdInAndStatusOrderByStartAsc(List<Long> itemIds, BookingStatus status);
+
     boolean existsByBooker_IdAndItem_IdAndStatusAndEndBefore(
             Long bookerId,
             Long itemId,

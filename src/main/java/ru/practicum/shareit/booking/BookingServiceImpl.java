@@ -178,8 +178,15 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void validateBookingDates(LocalDateTime start, LocalDateTime end) {
-        if (start == null || end == null || start.isAfter(end) || start.equals(end)) {
-            log.warn("Некорректные даты бронирования: start={}, end={}", start, end);
+        LocalDateTime now = LocalDateTime.now();
+
+        if (start == null || end == null
+                || start.isAfter(end)
+                || start.equals(end)
+                || start.isBefore(now)
+                || end.isBefore(now)) {
+
+            log.warn("Некорректные даты бронирования: start={}, end={}, now={}", start, end, now);
             throw new ValidationException("Некорректные даты начала и окончания бронирования");
         }
     }
