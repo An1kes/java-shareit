@@ -21,7 +21,8 @@ public class UserServiceImpl implements UserService {
     public UserDto create(UserDto userDto) {
         checkEmailUnique(userDto.getEmail(), -1L);
         User user = UserMapper.toUser(userDto);
-        userRepository.create(user);
+
+        userRepository.save(user);
 
         log.info("Пользователь успешно создан с ID: {}", user.getId());
         return UserMapper.toUserDto(user);
@@ -45,7 +46,7 @@ public class UserServiceImpl implements UserService {
             }
         }
 
-        userRepository.updateUser(oldUser);
+        userRepository.save(oldUser);
         log.info("Пользователь успешно обновлен с ID: {}", oldUser.getId());
         return UserMapper.toUserDto(oldUser);
     }
@@ -63,7 +64,8 @@ public class UserServiceImpl implements UserService {
     public Boolean delete(Long userId) {
         getUserOrThrow(userId);
         log.info("Пользователь успешно удален с ID: {}", userId);
-        return userRepository.deleteUser(userId);
+        userRepository.deleteById(userId);
+        return true;
     }
 
     @Override
@@ -81,22 +83,13 @@ public class UserServiceImpl implements UserService {
     }
 
     private void checkEmailUnique(String email, Long userId) {
-        boolean emailExists = false;
-        Collection<User> users = userRepository.findAll();
-        for (User user : users) {
-            if (userId.equals(user.getId())) {
-                continue;
+        userRepository.findByEmailIgnoreCase(email).ifPresent(user -> {
+            // Если email найден у ДРУГОГО пользователя, бросаем ошибку 409
+            if (!user.getId().equals(userId)) {
+                log.warn("Попытка зарегистрировать уже занятый email: {}", email);
+                throw new ConflictException("Email " + email + " уже занят другим пользователем");
             }
-            if (email.equalsIgnoreCase(user.getEmail())) {
-                emailExists = true;
-                break;
-            }
-        }
-
-        if (emailExists) {
-            log.warn("Попытка регистрации/обновления на уже занятый email: {}", email);
-            throw new ConflictException("Email " + email + " уже занят другим пользователем");
-        }
+        });
     }
 
 }

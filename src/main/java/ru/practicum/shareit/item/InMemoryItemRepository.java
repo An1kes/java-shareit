@@ -1,41 +1,37 @@
 package ru.practicum.shareit.item;
 
-import org.springframework.stereotype.Repository;
 import ru.practicum.shareit.item.model.Item;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
-@Repository
-public class InMemoryItemRepository implements ItemRepository {
+public class InMemoryItemRepository {
     private final Map<Long, Item> items = new HashMap<>();
 
-    @Override
     public Item create(Item item) {
         item.setId(getId());
         items.put(item.getId(), item);
         return item;
     }
 
-    @Override
     public Item updateItem(Item item) {
         items.put(item.getId(), item);
         return item;
     }
 
-    @Override
     public Optional<Item> findById(Long itemId) {
         Item item = items.get(itemId);
         return Optional.ofNullable(item);
     }
 
-    @Override
     public Collection<Item> findAll() {
         return items.values();
 
     }
 
-    @Override
     public Collection<Item> search(String text) {
 
         String query = text.toLowerCase();
