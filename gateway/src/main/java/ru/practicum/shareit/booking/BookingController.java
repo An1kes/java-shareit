@@ -31,12 +31,17 @@ public class BookingController {
 		return bookingClient.getBookings(userId, state, from, size);
 	}
 
-	@PostMapping
-	public ResponseEntity<Object> bookItem(@RequestHeader("X-Sharer-User-Id") long userId,
-			@RequestBody @Valid BookItemRequestDto requestDto) {
-		log.info("Creating booking {}, userId={}", requestDto, userId);
-		return bookingClient.bookItem(userId, requestDto);
-	}
+    @PostMapping
+    public ResponseEntity<Object> bookItem(@RequestHeader("X-Sharer-User-Id") long userId,
+                                           @RequestBody @Valid BookItemRequestDto requestDto) {
+        if (requestDto.getStart().isAfter(requestDto.getEnd()) || requestDto.getStart().equals(requestDto.getEnd())) {
+            log.warn("Ошибка валидации дат бронирования на шлюзе: start={}, end={}", requestDto.getStart(), requestDto.getEnd());
+            return ResponseEntity.badRequest().body("Дата начала бронирования должна быть раньше даты окончания");
+        }
+
+        log.info("Creating booking {}, userId={}", requestDto, userId);
+        return bookingClient.bookItem(userId, requestDto);
+    }
 
 	@GetMapping("/{bookingId}")
 	public ResponseEntity<Object> getBooking(@RequestHeader("X-Sharer-User-Id") long userId,

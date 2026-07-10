@@ -49,6 +49,11 @@ public class ItemController {
 
     @GetMapping("/search")
     public ResponseEntity<Object> searchItems(@RequestParam String text) {
+        if (text == null || text.isBlank()) {
+            log.info("Получен пустой поисковый запрос на шлюзе. Возвращаем пустой список.");
+            return ResponseEntity.ok(java.util.Collections.emptyList());
+        }
+
         log.info("Search items with text={}", text);
         return itemClient.searchItems(text);
     }

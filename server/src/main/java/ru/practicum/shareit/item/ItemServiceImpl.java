@@ -44,7 +44,7 @@ public class ItemServiceImpl implements ItemService {
         if (itemDto.getRequestId() != null) {
             ItemRequest request = requestRepository.findById(itemDto.getRequestId())
                     .orElseThrow(() -> new NotFoundException("Запрос с ID " + itemDto.getRequestId() + " не найден"));
-            item.setRequest(request); // Привязываем запрос к вещи
+            item.setRequest(request);
         }
 
         Item savedItem = itemRepository.save(item);
@@ -150,14 +150,12 @@ public class ItemServiceImpl implements ItemService {
 
     @Override
     public Collection<ItemDto> search(String text) {
-        if (text == null || text.isBlank()) {
-            return Collections.emptyList();
-        } else {
+
             return itemRepository.search(text)
                     .stream()
                     .map(ItemMapper::toItemDto)
                     .toList();
-        }
+
     }
 
     @Override

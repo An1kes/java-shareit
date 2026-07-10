@@ -31,7 +31,6 @@ public class BookingServiceImpl implements BookingService {
         Item item = getItemOrThrow(bookingDto.getItemId());
 
         checkBookingFeasibility(item, userId);
-        validateBookingDates(bookingDto.getStart(), bookingDto.getEnd());
 
         Booking booking = BookingMapper.toBooking(bookingDto);
         booking.setItem(item);
@@ -176,19 +175,6 @@ public class BookingServiceImpl implements BookingService {
                 });
     }
 
-    private void validateBookingDates(LocalDateTime start, LocalDateTime end) {
-        LocalDateTime now = LocalDateTime.now();
-
-        if (start == null || end == null
-                || start.isAfter(end)
-                || start.equals(end)
-                || start.isBefore(now)
-                || end.isBefore(now)) {
-
-            log.warn("Некорректные даты бронирования: start={}, end={}, now={}", start, end, now);
-            throw new ValidationException("Некорректные даты начала и окончания бронирования");
-        }
-    }
 
     private void checkBookingFeasibility(Item item, Long userId) {
         if (item.getOwner().getId().equals(userId)) {
