@@ -13,13 +13,13 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class BookItemRequestDto {
-	private long itemId;
+    private long itemId;
 
     @NotNull(message = "Дата начала не может быть пустой")
-	@FutureOrPresent
-	private LocalDateTime start;
+    @FutureOrPresent
+    private LocalDateTime start;
 
     @NotNull(message = "Дата конца не может быть пустой")
-	@Future
-	private LocalDateTime end;
+    @Future
+    private LocalDateTime end;
 }
